@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>社区适老化评估地图 | Age-Friendly Community Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Microsoft YaHei',sans-serif; background:#0f1117; color:#e0e0e0; display:flex; height:100vh; overflow:hidden; }
+
+/* 左侧面板 */
+#sidebar { width:360px; min-width:360px; background:#1a1d27; display:flex; flex-direction:column; border-right:1px solid #2a2d3a; z-index:10; }
+#sidebar-header { padding:16px 20px; background:linear-gradient(135deg,#1e3a5f,#0d2137); border-bottom:1px solid #2a4a6a; display:flex; justify-content:space-between; align-items:center; }
+#header-text h1 { font-size:14px; color:#4fc3f7; font-weight:700; letter-spacing:0.5px; }
+#header-text p  { font-size:11px; color:#78909c; margin-top:3px; }
+
+/* 语言切换按钮 */
+#lang-toggle { display:flex; background:#0d2137; border-radius:8px; overflow:hidden; border:1px solid #2a4a6a; flex-shrink:0; }
+.lang-btn { padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; border:none; background:transparent; color:#78909c; transition:all 0.2s; }
+.lang-btn.active { background:#4fc3f7; color:#0d2137; }
+.lang-btn:hover:not(.active) { color:#cfd8dc; }
+
+#stats-bar { display:flex; padding:10px 12px; gap:8px; background:#141720; border-bottom:1px solid #2a2d3a; }
+.stat-item { flex:1; text-align:center; background:#1e2130; border-radius:8px; padding:7px 4px; }
+.stat-val { font-size:20px; font-weight:700; }
+.stat-lbl { font-size:10px; color:#78909c; margin-top:2px; }
+
+#community-list { flex:1; overflow-y:auto; padding:8px; }
+#community-list::-webkit-scrollbar { width:4px; }
+#community-list::-webkit-scrollbar-thumb { background:#3a3d4a; border-radius:2px; }
+
+.comm-card { background:#1e2130; border-radius:10px; padding:11px 13px; margin-bottom:8px; cursor:pointer; border:1.5px solid transparent; transition:all 0.2s; }
+.comm-card:hover { border-color:#4fc3f7; background:#232840; }
+.comm-card.active { border-color:#4fc3f7; background:#1a2840; }
+.cc-top { display:flex; justify-content:space-between; align-items:center; }
+.cc-name { font-size:13px; font-weight:600; }
+.cc-badge { font-size:17px; font-weight:800; padding:2px 8px; border-radius:6px; min-width:46px; text-align:center; }
+.bg-green  { background:rgba(102,187,106,0.15); color:#66bb6a; }
+.bg-yellow { background:rgba(255,167,38,0.15);  color:#ffa726; }
+.bg-red    { background:rgba(239,83,80,0.15);   color:#ef5350; }
+.cc-meta { font-size:11px; color:#78909c; margin-top:3px; }
+.cc-bar  { display:flex; align-items:center; gap:8px; margin-top:7px; }
+.bar-bg  { flex:1; height:5px; background:#2a2d3a; border-radius:3px; overflow:hidden; }
+.bar-fill { height:100%; border-radius:3px; }
+.fill-green  { background:linear-gradient(90deg,#43a047,#66bb6a); }
+.fill-yellow { background:linear-gradient(90deg,#f57c00,#ffa726); }
+.fill-red    { background:linear-gradient(90deg,#c62828,#ef5350); }
+.real-tag { font-size:10px; color:#4fc3f7; background:rgba(79,195,247,0.1); padding:1px 5px; border-radius:3px; margin-left:4px; }
+
+#legend { padding:10px 16px; background:#141720; border-top:1px solid #2a2d3a; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.leg-lbl  { font-size:11px; color:#78909c; }
+.leg-item { display:flex; align-items:center; gap:5px; font-size:11px; }
+.leg-dot  { width:11px; height:11px; border-radius:50%; }
+
+/* 地图 */
+#map-wrap { flex:1; position:relative; }
+#map { width:100%; height:100%; }
+.leaflet-container { background:#e8e8e8 !important; }
+
+/* 顶部筛选 */
+#top-bar { position:absolute; top:14px; left:14px; z-index:500; display:flex; gap:8px; }
+#filter-sel { background:rgba(255,255,255,0.95); border:1px solid #ccc; color:#333; padding:7px 12px; border-radius:8px; font-size:13px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.15); }
+.top-tag { background:rgba(255,255,255,0.95); border:1px solid #ccc; color:#555; padding:7px 12px; border-radius:8px; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.15); }
+
+/* 详情面板 */
+#detail { position:absolute; top:14px; right:14px; width:330px; background:rgba(22,25,36,0.97); border:1px solid #2a4a6a; border-radius:14px; padding:18px; display:none; z-index:600; backdrop-filter:blur(8px); }
+#detail.show { display:block; }
+#det-close { position:absolute; top:11px; right:13px; cursor:pointer; color:#78909c; font-size:18px; background:none; border:none; }
+#det-close:hover { color:#fff; }
+#det-name { font-size:15px; font-weight:700; color:#fff; margin-bottom:2px; }
+#det-sub  { font-size:11px; color:#78909c; margin-bottom:13px; }
+#det-score-row { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
+#det-score { font-size:48px; font-weight:900; line-height:1; }
+#det-grade { font-size:13px; font-weight:600; }
+#det-desc  { font-size:11px; color:#90a4ae; margin-top:3px; }
+#radar { width:100%; height:210px; }
+.dim-row    { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+.dim-name   { font-size:11px; color:#90a4ae; width:90px; flex-shrink:0; }
+.dim-bar-bg { flex:1; height:4px; background:#2a2d3a; border-radius:2px; overflow:hidden; }
+.dim-bar-fill { height:100%; border-radius:2px; }
+.dim-val    { font-size:11px; color:#cfd8dc; width:26px; text-align:right; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <div id="header-text">
+      <h1 id="title-text">🏘️ 中国社区适老化评估地图</h1>
+      <p id="subtitle-text">基于SciBERT-AHP混合评估体系 · 河南省示范版</p>
+    </div>
+    <div id="lang-toggle">
+      <button class="lang-btn active" onclick="setLang('zh')">中文</button>
+      <button class="lang-btn" onclick="setLang('en')">EN</button>
+    </div>
+  </div>
+  <div id="stats-bar">
+    <div class="stat-item"><div class="stat-val" style="color:#66bb6a" id="s-good">0</div><div class="stat-lbl" id="lbl-good">优良社区</div></div>
+    <div class="stat-item"><div class="stat-val" style="color:#ffa726" id="s-mid">0</div><div class="stat-lbl" id="lbl-mid">中等社区</div></div>
+    <div class="stat-item"><div class="stat-val" style="color:#ef5350" id="s-low">0</div><div class="stat-lbl" id="lbl-low">待改善</div></div>
+    <div class="stat-item"><div class="stat-val" style="color:#4fc3f7" id="s-avg">0</div><div class="stat-lbl" id="lbl-avg">平均分</div></div>
+  </div>
+  <div id="community-list"></div>
+  <div id="legend">
+    <span class="leg-lbl" id="leg-title">评分图例：</span>
+    <div class="leg-item"><div class="leg-dot" style="background:#66bb6a"></div><span id="leg-good">优良 ≥70</span></div>
+    <div class="leg-item"><div class="leg-dot" style="background:#ffa726"></div><span id="leg-mid">中等 50-69</span></div>
+    <div class="leg-item"><div class="leg-dot" style="background:#ef5350"></div><span id="leg-low">待改善 &lt;50</span></div>
+  </div>
+</div>
+
+<div id="map-wrap">
+  <div id="map"></div>
+  <div id="top-bar">
+    <select id="filter-sel" onchange="applyFilter(this.value)">
+      <option value="all" id="opt-all">全部社区</option>
+      <option value="good" id="opt-good">优良 ≥70分</option>
+      <option value="mid" id="opt-mid">中等 50-69分</option>
+      <option value="low" id="opt-low">待改善 &lt;50分</option>
+    </select>
+    <div class="top-tag" id="top-count">📍 河南省 · 15个社区</div>
+  </div>
+  <div id="detail">
+    <button id="det-close" onclick="closeDetail()">✕</button>
+    <div id="det-name"></div>
+    <div id="det-sub"></div>
+    <div id="det-score-row">
+      <div id="det-score"></div>
+      <div><div id="det-grade"></div><div id="det-desc"></div></div>
+    </div>
+    <div id="radar"></div>
+    <div id="det-dims"></div>
+  </div>
+</div>
+
+<script>
+// ── 语言配置 ──
+const I18N = {
+  zh: {
+    title:     '🏘️ 中国社区适老化评估地图',
+    subtitle:  '基于SciBERT-AHP混合评估体系 · 河南省示范版',
+    lblGood:   '优良社区', lblMid: '中等社区', lblLow: '待改善', lblAvg: '平均分',
+    legTitle:  '评分图例：', legGood: '优良 ≥70', legMid: '中等 50-69', legLow: '待改善 <50',
+    optAll: '全部社区', optGood: '优良 ≥70分', optMid: '中等 50-69分', optLow: '待改善 <50分',
+    topCount: (n) => `📍 河南省 · ${n}个社区`,
+    realTag: '论文案例',
+    grades: [
+      { min:80, label:'优秀', desc:'适老化建设标杆社区',      color:'#66bb6a', badge:'bg-green',  fill:'fill-green'  },
+      { min:70, label:'良好', desc:'适老化建设较为完善',      color:'#81c784', badge:'bg-green',  fill:'fill-green'  },
+      { min:60, label:'中等', desc:'部分维度有待提升',        color:'#ffa726', badge:'bg-yellow', fill:'fill-yellow' },
+      { min:50, label:'一般', desc:'需重点改善多个维度',      color:'#ff7043', badge:'bg-yellow', fill:'fill-yellow' },
+      { min:0,  label:'待改善',desc:'适老化基础设施严重不足', color:'#ef5350', badge:'bg-red',    fill:'fill-red'    },
+    ],
+    detSub: (c) => `${c.city_zh} · ${c.type_zh} · 建于${c.year}年`,
+    detName: (c,real) => c.name_zh + (real ? ' 📌' : ''),
+    cardMeta: (c) => `${c.city_zh} · ${c.type_zh} · ${c.year}年`,
+    dimNames: ['物理空间','健康医疗','交通出行','社会参与','安全应急','生活配套','心理关怀','社区治理'],
+  },
+  en: {
+    title:     '🏘️ China Age-Friendly Community Map',
+    subtitle:  'SciBERT-AHP Evaluation System · Henan Province Demo',
+    lblGood:   'Good', lblMid: 'Moderate', lblLow: 'Poor', lblAvg: 'Avg Score',
+    legTitle:  'Legend: ', legGood: 'Good ≥70', legMid: 'Moderate 50-69', legLow: 'Poor <50',
+    optAll: 'All Communities', optGood: 'Good ≥70', optMid: 'Moderate 50-69', optLow: 'Poor <50',
+    topCount: (n) => `📍 Henan Province · ${n} Communities`,
+    realTag: 'Thesis Case',
+    grades: [
+      { min:80, label:'Excellent', desc:'Benchmark age-friendly community',   color:'#66bb6a', badge:'bg-green',  fill:'fill-green'  },
+      { min:70, label:'Good',      desc:'Well-developed age-friendly features',color:'#81c784', badge:'bg-green',  fill:'fill-green'  },
+      { min:60, label:'Moderate',  desc:'Some dimensions need improvement',   color:'#ffa726', badge:'bg-yellow', fill:'fill-yellow' },
+      { min:50, label:'Fair',      desc:'Multiple dimensions need attention',  color:'#ff7043', badge:'bg-yellow', fill:'fill-yellow' },
+      { min:0,  label:'Poor',      desc:'Severely lacking age-friendly infra', color:'#ef5350', badge:'bg-red',    fill:'fill-red'    },
+    ],
+    detSub: (c) => `${c.city_en} · ${c.type_en} · Built in ${c.year}`,
+    detName: (c,real) => c.name_en + (real ? ' 📌' : ''),
+    cardMeta: (c) => `${c.city_en} · ${c.type_en} · ${c.year}`,
+    dimNames: ['Physical Space','Health Services','Transport','Social Participation','Safety & Emergency','Daily Services','Mental Wellness','Governance'],
+  }
+};
+
+// ── 维度配置 ──
+const DIMS = [
+  { key:'physical',   color:'#4fc3f7' },
+  { key:'health',     color:'#66bb6a' },
+  { key:'transport',  color:'#ffa726' },
+  { key:'social',     color:'#ab47bc' },
+  { key:'safety',     color:'#ef5350' },
+  { key:'service',    color:'#26c6da' },
+  { key:'mental',     color:'#d4e157' },
+  { key:'governance', color:'#ff7043' },
+];
+const WEIGHTS = [0.18, 0.22, 0.14, 0.12, 0.13, 0.10, 0.07, 0.04];
+
+// ── 社区数据 ──
+const DATA = [
+  { id:1,  name_zh:'金水区·盛世名门',   name_en:'Jinshui·Shengshi Mingmen', city_zh:'郑州市·金水区', city_en:'Zhengzhou·Jinshui', real:true,  lat:34.7750, lng:113.6780, type_zh:'新建商品房', type_en:'New Commercial', year:2018, d:{physical:85,health:82,transport:79,social:71,safety:88,service:83,mental:68,governance:75} },
+  { id:2,  name_zh:'中原区·西流湖社区', name_en:'Zhongyuan·Xiliuhu',        city_zh:'郑州市·中原区', city_en:'Zhengzhou·Zhongyuan',real:true,  lat:34.7480, lng:113.5890, type_zh:'单位房改房', type_en:'Work-Unit Housing',year:1998, d:{physical:62,health:68,transport:71,social:66,safety:60,service:65,mental:58,governance:62} },
+  { id:3,  name_zh:'二七区·德化老街',   name_en:'Erqi·Dehua Old Quarter',   city_zh:'郑州市·二七区', city_en:'Zhengzhou·Erqi',     real:true,  lat:34.7290, lng:113.6520, type_zh:'老旧小区',   type_en:'Old Residential', year:1985, d:{physical:41,health:52,transport:48,social:55,safety:44,service:50,mental:46,governance:38} },
+  { id:4,  name_zh:'惠济区·康养新城',   name_en:'Huiji·Kangyang New City',  city_zh:'郑州市·惠济区', city_en:'Zhengzhou·Huiji',    real:false, lat:34.8650, lng:113.6200, type_zh:'养老专项',   type_en:'Senior-Dedicated', year:2021, d:{physical:91,health:94,transport:72,social:88,safety:90,service:89,mental:85,governance:82} },
+  { id:5,  name_zh:'涧西区·银龄坊',     name_en:'Jianxi·Yinling Quarter',   city_zh:'洛阳市·涧西区', city_en:'Luoyang·Jianxi',     real:false, lat:34.6580, lng:112.3980, type_zh:'新建商品房', type_en:'New Commercial',  year:2019, d:{physical:78,health:75,transport:68,social:72,safety:80,service:74,mental:65,governance:70} },
+  { id:6,  name_zh:'老城区·幸福里',     name_en:'Old Town·Xingfu Lane',     city_zh:'洛阳市·老城区', city_en:'Luoyang·Old Town',   real:false, lat:34.6840, lng:112.4700, type_zh:'老旧小区',   type_en:'Old Residential', year:1979, d:{physical:35,health:44,transport:42,social:60,safety:38,service:46,mental:52,governance:30} },
+  { id:7,  name_zh:'龙亭区·夕阳红',     name_en:'Longting·Sunset Garden',   city_zh:'开封市·龙亭区', city_en:'Kaifeng·Longting',   real:false, lat:34.8200, lng:114.3100, type_zh:'老旧改造',   type_en:'Renovated',       year:1992, d:{physical:55,health:60,transport:52,social:65,safety:58,service:56,mental:62,governance:50} },
+  { id:8,  name_zh:'卫滨区·和谐苑',     name_en:'Weibin·Harmony Garden',    city_zh:'新乡市·卫滨区', city_en:'Xinxiang·Weibin',    real:false, lat:35.2980, lng:113.8730, type_zh:'单位房改房', type_en:'Work-Unit Housing',year:2003, d:{physical:63,health:65,transport:60,social:58,safety:67,service:62,mental:55,governance:60} },
+  { id:9,  name_zh:'魏都区·颐养园',     name_en:'Weidu·Yiyang Garden',      city_zh:'许昌市·魏都区', city_en:'Xuchang·Weidu',      real:false, lat:34.0350, lng:113.8320, type_zh:'养老专项',   type_en:'Senior-Dedicated', year:2020, d:{physical:82,health:88,transport:65,social:80,safety:85,service:82,mental:78,governance:75} },
+  { id:10, name_zh:'新华区·晚晴苑',     name_en:'Xinhua·Wanqing Garden',    city_zh:'平顶山市·新华区',city_en:'Pingdingshan·Xinhua',real:false, lat:33.7430, lng:113.2900, type_zh:'新建商品房', type_en:'New Commercial',  year:2017, d:{physical:70,health:72,transport:63,social:68,safety:74,service:69,mental:60,governance:65} },
+  { id:11, name_zh:'文峰区·安乐居',     name_en:'Wenfeng·Anle Residence',   city_zh:'安阳市·文峰区', city_en:'Anyang·Wenfeng',     real:false, lat:36.0980, lng:114.3570, type_zh:'老旧小区',   type_en:'Old Residential', year:1988, d:{physical:42,health:50,transport:45,social:58,safety:40,service:48,mental:50,governance:35} },
+  { id:12, name_zh:'卧龙区·金色年华',   name_en:'Wolong·Golden Years',      city_zh:'南阳市·卧龙区', city_en:'Nanyang·Wolong',     real:false, lat:32.9900, lng:112.5100, type_zh:'新建商品房', type_en:'New Commercial',  year:2020, d:{physical:75,health:70,transport:65,social:70,safety:72,service:73,mental:63,governance:68} },
+  { id:13, name_zh:'解放区·智慧养老',   name_en:'Jiefang·Smart Senior Hub', city_zh:'焦作市·解放区', city_en:'Jiaozuo·Jiefang',    real:false, lat:35.2150, lng:113.2380, type_zh:'养老专项',   type_en:'Senior-Dedicated', year:2022, d:{physical:88,health:91,transport:70,social:85,safety:88,service:87,mental:82,governance:80} },
+  { id:14, name_zh:'浉河区·夕阳里',     name_en:'Shihe·Sunset Lane',        city_zh:'信阳市·浉河区', city_en:'Xinyang·Shihe',      real:false, lat:32.1250, lng:114.0750, type_zh:'单位房改房', type_en:'Work-Unit Housing',year:2000, d:{physical:58,health:62,transport:55,social:63,safety:60,service:58,mental:60,governance:52} },
+  { id:15, name_zh:'梁园区·银龄家园',   name_en:'Liangyuan·Silver Garden',  city_zh:'商丘市·梁园区', city_en:'Shangqiu·Liangyuan', real:false, lat:34.4150, lng:115.6500, type_zh:'新建商品房', type_en:'New Commercial',  year:2019, d:{physical:68,health:66,transport:60,social:65,safety:70,service:65,mental:58,governance:63} },
+];
+
+// ── 状态 ──
+let lang = 'zh';
+let tileLayer = null;
+let leafletMarkers = [];
+let radarChart = null;
+let currentFilter = 'all';
+
+// ── 工具 ──
+function calcScore(c) {
+  return Math.round(DIMS.reduce((s,d,i) => s + c.d[d.key]*WEIGHTS[i], 0));
+}
+function getGrade(s) {
+  const t = I18N[lang];
+  return t.grades.find(g => s >= g.min);
+}
+function markerColor(s){ return s>=70?'#66bb6a':s>=50?'#ffa726':'#ef5350'; }
+function filteredData() {
+  if(currentFilter==='good') return DATA.filter(c=>calcScore(c)>=70);
+  if(currentFilter==='mid')  return DATA.filter(c=>{const s=calcScore(c);return s>=50&&s<70;});
+  if(currentFilter==='low')  return DATA.filter(c=>calcScore(c)<50);
+  return DATA;
+}
+
+// ── 地图初始化 ──
+const map = L.map('map', { center:[34.5,113.5], zoom:7 });
+
+const TILES = {
+  zh: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+  en: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+};
+const TILE_OPTS = {
+  zh: { subdomains:['1','2','3','4'], attribution:'© 高德地图', maxZoom:18 },
+  en: { subdomains:['a','b','c','d'], attribution:'© OpenStreetMap © CARTO', maxZoom:19 },
+};
+
+function switchTile(l) {
+  if(tileLayer) map.removeLayer(tileLayer);
+  tileLayer = L.tileLayer(TILES[l], TILE_OPTS[l]).addTo(map);
+}
+
+// ── 渲染标记 ──
+function renderMarkers(list) {
+  leafletMarkers.forEach(m => map.removeLayer(m));
+  leafletMarkers = [];
+  list.forEach(c => {
+    const s=calcScore(c), col=markerColor(s), sz=s>=80?38:s>=60?32:26;
+    const icon = L.divIcon({
+      className:'',
+      html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:${sz>30?12:10}px;font-weight:800;color:#fff;box-shadow:0 2px 10px ${col}99;cursor:pointer;margin-left:-${sz/2}px;margin-top:-${sz/2}px">${s}</div>`,
+      iconSize:[sz,sz], iconAnchor:[sz/2,sz/2],
+    });
+    const m = L.marker([c.lat,c.lng],{icon}).addTo(map);
+    m.on('click',()=>openDetail(c.id));
+    leafletMarkers.push(m);
+  });
+}
+
+// ── 渲染列表 ──
+function renderList(list) {
+  const t = I18N[lang];
+  const el = document.getElementById('community-list');
+  el.innerHTML='';
+  let good=0,mid=0,low=0,tot=0;
+  list.forEach(c => {
+    const s=calcScore(c), g=getGrade(s);
+    tot+=s;
+    if(s>=70)good++; else if(s>=50)mid++; else low++;
+    const card=document.createElement('div');
+    card.className='comm-card'; card.id='card-'+c.id;
+    const name = lang==='zh'?c.name_zh:c.name_en;
+    card.innerHTML=`
+      <div class="cc-top">
+        <div class="cc-name">${name}${c.real?`<span class="real-tag">${t.realTag}</span>`:''}</div>
+        <div class="cc-badge ${g.badge}">${s}</div>
+      </div>
+      <div class="cc-meta">${t.cardMeta(c)}</div>
+      <div class="cc-bar"><div class="bar-bg"><div class="bar-fill ${g.fill}" style="width:${s}%"></div></div></div>`;
+    card.onclick=()=>openDetail(c.id);
+    el.appendChild(card);
+  });
+  document.getElementById('s-good').textContent=good;
+  document.getElementById('s-mid').textContent=mid;
+  document.getElementById('s-low').textContent=low;
+  document.getElementById('s-avg').textContent=list.length?Math.round(tot/list.length):0;
+  document.getElementById('top-count').textContent=t.topCount(list.length);
+}
+
+// ── 更新静态UI文字 ──
+function updateUIText() {
+  const t = I18N[lang];
+  document.getElementById('title-text').textContent    = t.title;
+  document.getElementById('subtitle-text').textContent = t.subtitle;
+  document.getElementById('lbl-good').textContent = t.lblGood;
+  document.getElementById('lbl-mid').textContent  = t.lblMid;
+  document.getElementById('lbl-low').textContent  = t.lblLow;
+  document.getElementById('lbl-avg').textContent  = t.lblAvg;
+  document.getElementById('leg-title').textContent = t.legTitle;
+  document.getElementById('leg-good').textContent  = t.legGood;
+  document.getElementById('leg-mid').textContent   = t.legMid;
+  document.getElementById('leg-low').textContent   = t.legLow;
+  document.getElementById('opt-all').textContent   = t.optAll;
+  document.getElementById('opt-good').textContent  = t.optGood;
+  document.getElementById('opt-mid').textContent   = t.optMid;
+  document.getElementById('opt-low').textContent   = t.optLow;
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase().includes(lang==='zh'?'中':'en'));
+  });
+}
+
+// ── 详情面板 ──
+function openDetail(id) {
+  const c=DATA.find(x=>x.id===id); if(!c) return;
+  const t=I18N[lang], s=calcScore(c), g=getGrade(s);
+
+  document.querySelectorAll('.comm-card').forEach(el=>el.classList.remove('active'));
+  const card=document.getElementById('card-'+id);
+  if(card){ card.classList.add('active'); card.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+  map.setView([c.lat,c.lng],12);
+
+  document.getElementById('det-name').textContent  = t.detName(c,c.real);
+  document.getElementById('det-sub').textContent   = t.detSub(c);
+  document.getElementById('det-score').textContent = s;
+  document.getElementById('det-score').style.color = g.color;
+  document.getElementById('det-grade').textContent = g.label;
+  document.getElementById('det-grade').style.color = g.color;
+  document.getElementById('det-desc').textContent  = g.desc;
+  document.getElementById('detail').classList.add('show');
+
+  if(!radarChart) radarChart=echarts.init(document.getElementById('radar'));
+  radarChart.setOption({
+    backgroundColor:'transparent',
+    radar:{
+      indicator: t.dimNames.map(n=>({name:n,max:100})),
+      shape:'polygon', splitNumber:4,
+      axisName:{color:'#90a4ae',fontSize:10},
+      splitLine:{lineStyle:{color:'rgba(255,255,255,0.07)'}},
+      splitArea:{areaStyle:{color:['rgba(79,195,247,0.02)','rgba(79,195,247,0.05)']}},
+      axisLine:{lineStyle:{color:'rgba(255,255,255,0.1)'}},
+    },
+    series:[{type:'radar',data:[{
+      value:DIMS.map(d=>c.d[d.key]),
+      lineStyle:{color:g.color,width:2},
+      areaStyle:{color:g.color+'33'},
+      itemStyle:{color:g.color},
+      symbol:'circle',symbolSize:5,
+    }]}]
+  });
+
+  document.getElementById('det-dims').innerHTML = DIMS.map((d,i)=>{
+    const v=c.d[d.key], gd=getGrade(v);
+    return `<div class="dim-row">
+      <div class="dim-name">${t.dimNames[i]}</div>
+      <div class="dim-bar-bg"><div class="dim-bar-fill ${gd.fill}" style="width:${v}%;background:${d.color}"></div></div>
+      <div class="dim-val">${v}</div>
+    </div>`;
+  }).join('');
+}
+
+function closeDetail() {
+  document.getElementById('detail').classList.remove('show');
+  document.querySelectorAll('.comm-card').forEach(el=>el.classList.remove('active'));
+}
+
+function applyFilter(f) {
+  currentFilter=f;
+  const list=filteredData();
+  renderList(list);
+  renderMarkers(list);
+}
+
+// ── 语言切换 ──
+function setLang(l) {
+  lang=l;
+  switchTile(l);
+  updateUIText();
+  const list=filteredData();
+  renderList(list);
+  renderMarkers(list);
+  // 如果详情面板开着，刷新它
+  if(document.getElementById('detail').classList.contains('show')) {
+    const active=document.querySelector('.comm-card.active');
+    if(active) openDetail(parseInt(active.id.replace('card-','')));
+  }
+}
+
+// ── 启动 ──
+switchTile('zh');
+updateUIText();
+renderList(DATA);
+renderMarkers(DATA);
+setTimeout(()=>openDetail(1), 800);
+</script>
+</body>
+</html>
