@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>社区适老化评估地图 | Age-Friendly Community Map</title>
+<title>China Age-Friendly Community Map</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -89,12 +89,12 @@ body { font-family:'Microsoft YaHei',sans-serif; background:#0f1117; color:#e0e0
 <div id="sidebar">
   <div id="sidebar-header">
     <div id="header-text">
-      <h1 id="title-text">🏘️ 中国社区适老化评估地图</h1>
-      <p id="subtitle-text">基于SciBERT-AHP混合评估体系 · 河南省示范版</p>
+      <h1 id="title-text">🏘️ China Age-Friendly Community Map</h1>
+      <p id="subtitle-text">SciBERT-AHP Evaluation System · Henan Province Demo</p>
     </div>
     <div id="lang-toggle">
-      <button class="lang-btn active" onclick="setLang('zh')">中文</button>
-      <button class="lang-btn" onclick="setLang('en')">EN</button>
+      <button class="lang-btn" onclick="setLang('zh')">中文</button>
+      <button class="lang-btn active" onclick="setLang('en')">EN</button>
     </div>
   </div>
   <div id="stats-bar">
@@ -214,7 +214,7 @@ const DATA = [
 ];
 
 // ── 状态 ──
-let lang = 'zh';
+let lang = 'en';
 let tileLayer = null;
 let leafletMarkers = [];
 let radarChart = null;
@@ -399,7 +399,7 @@ function setLang(l) {
 }
 
 // ── 启动 ──
-switchTile('zh');
+switchTile('en');
 updateUIText();
 renderList(DATA);
 renderMarkers(DATA);
